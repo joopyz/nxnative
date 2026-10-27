@@ -13,6 +13,15 @@ CUTS = {
          'GPU Heap reserve 2 GiB -> 1.5 GiB; initial 1 GiB commit unchanged'),
         (0x57b2a0, 'e1030232', '0100a252',
          'common small-block pool reserve 1 GiB -> 256 MiB; initial 4 MiB commit unchanged'),
+        # Mode 7 clears depth, then initializes stencil through a raw-buffer
+        # compute dispatch over the Tegra D24S8 allocation. Metal's stencil
+        # texture does not alias that buffer. Also clear stencil through NVN:
+        # w21 is 1 for mode 7 and 0 for mode 1 (ordinary depth-only clears),
+        # so NEG supplies the respective masks 0xffffffff and 0. The original
+        # dispatch remains; its lower-five-bit pattern is not consumed by the
+        # eight stencil-fetch shader variants. See the game's graphics note.
+        (0xb55250, 'e3031f2a', 'e303154b',
+         'mode-7 scene initialization: clear native stencil before raw Tegra D24S8 compute writes'),
     ],
 }
 

@@ -26,6 +26,16 @@ All 23,133 records compile for Mac and iOS. Single-stage covering pairs provide 
 
 After the first frame the render thread waits in `main+0xb5e808` for a timestamp report's counter field to become zero. The host wrote the timestamp into both fields unless conditional rendering was enabled. This leaves the game polling a permanently nonzero counter. The general completion path now writes zero to the counter field and time to the timestamp field, independent of the conditional-rendering profile key. Earlier runs stalled during loading or the cart scene after all submitted GPU work completed. A global game mutex at `main+0x2aea1c0` was free while a worker still waited on its adjacent LightEvent. A native replay reproduces the cause: the plain unlock STR can remain buffered while SignalLightEvent takes its already-signalled fast path, losing the wake. All 517 matching inlined unlocks are now corrected by build-gated release-store cuts. The corrected, unprobed eight-minute run reached character creation and over 14,100 frames, about 30 fps, with `DM_PREEMPT=0`.
 
+## Indoor stencil initialization
+
+The first Helgen Keep interior sharply alternated between bright and dark while standing still. This is [raw depth/stencil storage written as a buffer](../../../docs/reference/rendering.md#raw-depthstencil-storage-written-as-a-buffer), rather than torch animation or exposure adaptation.
+
+Scene-init mode 7 in `main+0xb551c0` clears depth, then dispatches `a76fe13a8630d619` over the same allocation: storage buffer 0 is exactly the D24S8 texture's address and storage size (1600x900, 6,553,600 bytes in the tested scene). The shader writes a repeated stencil pattern whose upper three bits are zero. Those buffer writes do not update the separate Metal stencil plane. Scaleform clears that plane to 255 at the end of a frame; next frame the shadow-mask shader `f83614ab6954bec4` reads shadow class `255 >> 5 = 7`, selecting unused secondary-shadow data.
+
+A build-gated cut at `main+0xb55250` changes `mov w3,wzr` to `neg w3,w21`. Mode 7 has `w21=1`, so its existing NVN depth clear also initializes stencil to zero; mode 1 has `w21=0`, preserving ordinary depth-only clears. This is a deliberate platform adaptation at the scene initializer, not general coherence between raw buffers and Metal depth textures. The original compute dispatch, UI rendering and shadow shaders remain intact.
+
+All eight translated variants fetching this stencil slot extract the upper three bits. The original lower-five-bit patterned initialization still does not transfer to the Metal texture; reproducing the Tegra raw layout and broader raw depth/stencil aliasing remain open. In an isolated copy of the user's interior checkpoint, the native stencil clear removed the large frame-to-frame brightness jumps across 16 adjacent frames (mean luminance 45.0 to 43.4, changing smoothly). The subsequent full 180-second route reached frame 5,273 at 29.5 fps (p50 33.33 ms, p99 42.25 ms), with graceful shutdown and the known second-audio-renderer warning. Current-chain static checks pass all 23,133 Skyrim and 12,851 Arceus shaders with unchanged MSL and interfaces. Updated iPhone validation is pending.
+
 ## Audio and remaining validation
 
 This SDK's renderer Update locks `nn::os::MutexType` at +0x1f8 and exports no `SdkMutexType::Lock`. Resolve required lock symbols after selecting the actual layout. The implementation's system member is also recovered from its own first mode call: +0x50 on this SDK, instead of the previous hardcoded +0x60. The legacy first command has both size and ID20, which falsely passed the modern header walk. Validating its enabled boolean selects the older header correctly, and the existing SDK4 DeviceSink layout captures nonzero stereo PCM. Concurrent renderer instances still produce a warning and need further validation. The renderer also reports `stage 1 cb11 has no uniform buffer bound`; its significance outside the tested Helgen scene remains open.
@@ -48,6 +58,7 @@ The profile selects `pad_layout full` (3D): dragging an empty area in the right 
 - [Diagnostic snapshots of short shader controls](../../../docs/reference/shaders.md#diagnostic-snapshots-of-short-shader-controls).
 - [The renderer's update lock](../../../docs/reference/audio.md#the-renderers-update-lock-update_lock).
 - [Timestamp report completion counter](../../../docs/reference/rendering.md#timestamp-report-completion-counter).
+- [Raw depth/stencil storage written as a buffer](../../../docs/reference/rendering.md#raw-depthstencil-storage-written-as-a-buffer).
 - [Audio renderer system offset](../../../docs/reference/audio.md#audio-renderer-system-offset-inside-its-implementation).
 - [Control-memory grant queries](../../../docs/reference/nvn-objects.md#control-memory-grant-queries).
 - [Plain mutex unlock before an auto-clear event fast path](../../../docs/reference/threads.md#plain-mutex-unlock-before-an-auto-clear-event-fast-path).
