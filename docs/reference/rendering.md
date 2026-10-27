@@ -702,6 +702,13 @@ The replay on Metal (`dm/gfx/nvn/nvn_mtl.m`) and the Vulkan and OpenGL layers. E
 
 ## Conditional rendering and queries
 
+### Timestamp report completion counter
+
+- **Symptom:** the first frame presents, then the render thread keeps polling a timestamp report while the other game threads wait.
+- **Cause:** the host wrote the timestamp into both fields of `NVNcounterData` unless `render_cond` was enabled. A timestamp report has a zero counter field and a separate timestamp field. Creation Engine polls the first field for zero to observe completion, so the duplicated time never satisfies its wait.
+- **Fix:** completed reports write zero to the counter field and the time to the timestamp field, independently of conditional rendering. Samples-passed reports keep their accumulated count. Regression checks cover both TIMESTAMP and TIMESTAMP_TOP with `render_cond` disabled.
+- **Found on:** [Skyrim](../../dm/games/01000A10041EA000/README.md#graphics-completion), render-thread wait at `main+0xb5e808`.
+
 ### Conditional rendering evaluated at replay
 
 - **Symptom:** the 3D scene black (targets cleared again before they are read); `[RED] SetRenderEnableConditional: the host draws anyway`; with a game that skips clears under render conditions, scenes black behind the HUD (Mario vs. Donkey Kong's levels, 1.0.1).
