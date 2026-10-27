@@ -112,6 +112,8 @@ class BsaTests(unittest.TestCase):
             def __init__(self, file): self.file = file
             def __enter__(self): return self
             def __exit__(self, *args): self.file.close()
+            def seek(self, *args): return self.file.seek(*args)
+            def tell(self): return self.file.tell()
             def read(self, size=-1):
                 if size < 0: raise AssertionError('whole-archive read')
                 return self.file.read(size)
@@ -121,6 +123,21 @@ class BsaTests(unittest.TestCase):
             with patch.object(split, 'open', lambda *a, **k: Reader(original_open(*a, **k)), create=True):
                 rel, keys, pairs, trees = split.scan_file((str(path), path.name))
             self.assertEqual(rel, path.name)
+            self.assertEqual(len(keys), 1)
+            self.assertEqual(next(iter(keys.values()))[1], 'vs')
+
+    def test_archive_inside_romfs_image(self):
+        import romfs_image
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / 'RomFS'
+            (source / 'Data').mkdir(parents=True)
+            (source / 'Data/shaders.bsa').write_bytes(archive(shader('vs')[0]))
+            image = root / 'romfs.img'
+            romfs_image.pack(source, image)
+            rel, keys, pairs, trees = split.scan_file(
+                (str(image / 'Data/shaders.bsa'), 'Data/shaders.bsa'))
+            self.assertEqual(rel, 'Data/shaders.bsa')
             self.assertEqual(len(keys), 1)
             self.assertEqual(next(iter(keys.values()))[1], 'vs')
 

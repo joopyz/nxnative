@@ -9,10 +9,14 @@ import struct
 import zlib
 
 
-def shader_files(path):
+def shader_files(path, *, opener=open):
     """Yield (member path, bytes) for .fxp members; other payloads stay on disk."""
-    with open(path, 'rb') as f:
-        length = os.fstat(f.fileno()).st_size
+    with opener(path, 'rb') as f:
+        # A RomFS-image member's descriptor belongs to the whole image.
+        # Bound offsets against this stream, not the backing descriptor.
+        f.seek(0, os.SEEK_END)
+        length = f.tell()
+        f.seek(0)
 
         def read(n):
             if n < 0 or n > length - f.tell():

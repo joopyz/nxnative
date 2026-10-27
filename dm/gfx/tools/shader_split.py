@@ -2097,7 +2097,7 @@ def scan_file_in(args):
     found = []; trees = {}
     if head[:4] == b'BSA\0':
         import bsa
-        for name, data in bsa.shader_files(path):
+        for name, data in bsa.shader_files(path, opener=open):
             found.extend(fxp_shaders(data, '/' + rel + '/' + name))
         return rel, uniq_keys(found), var_pairs(found), trees
     elif len(args) > 2 and args[2][0] == b'ARH1':
